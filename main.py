@@ -16,19 +16,14 @@ async def crop_pdf(file: UploadFile = File(...), crops: str = Form(...)):
         pdf_content = await file.read()
         doc = fitz.open(stream=pdf_content, filetype="pdf")
         
-        # --- LÓGICA ANTI-ERRO PARA O JSON ---
         crops_data = json.loads(crops)
-        # Se o n8n mandou como string dentro de string, carregamos de novo
         if isinstance(crops_data, str):
             crops_data = json.loads(crops_data)
-        # Se mandou apenas um objeto fora de uma lista, transformamos em lista
         if isinstance(crops_data, dict):
             crops_data = [crops_data]
-        # -------------------------------------
 
         results = []
         for crop in crops_data:
-            # Proteção: Verifica se crop é realmente um dicionário
             if not isinstance(crop, dict):
                 continue
                 
@@ -38,10 +33,13 @@ async def crop_pdf(file: UploadFile = File(...), crops: str = Form(...)):
             page = doc[page_idx]
             p_w, p_h = page.rect.width, page.rect.height
             
-            x0 = float(crop['x']) * p_w
-            y0 = float(crop['y']) * p_h
-            x1 = (float(crop['x']) + float(crop['width'])) * p_w
-            y1 = (float(crop['y']) + float(crop['height'])) * p_h
+            # --- CORREÇÃO DOS NOMES DAS CHAVES ---
+            # O Lovable envia xRel, yRel, wRel, hRel
+            x0 = float(crop['xRel']) * p_w
+            y0 = float(crop['yRel']) * p_h
+            x1 = (float(crop['xRel']) + float(crop['wRel'])) * p_w
+            y1 = (float(crop['yRel']) + float(crop['hRel'])) * p_h
+            # -------------------------------------
             
             pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=fitz.Rect(x0, y0, x1, y1))
             img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
@@ -55,7 +53,8 @@ async def crop_pdf(file: UploadFile = File(...), crops: str = Form(...)):
         doc.close()
         return results
     except Exception as e:
-        return {"error": str(e), "tipo_recebido": str(type(crops))}
+        # Retorna o erro detalhado para facilitar o debug no n8n
+        return {"error": str(e), "tipo_recebido": str(type(crops)), "payload_recebido": str(crops)[:200]}
 
 if __name__ == "__main__":
     import uvicorn
