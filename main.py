@@ -16,11 +16,24 @@ async def crop_pdf(file: UploadFile = File(...), crops: str = Form(...)):
         pdf_content = await file.read()
         doc = fitz.open(stream=pdf_content, filetype="pdf")
         
-        crops_data = json.loads(crops)
+        # --- LIMPEZA DO JSON ---
+        # Remove escapes excessivos se existirem (transforma \\\" em ")
+        if '\\"' in crops:
+            crops = crops.replace('\\"', '"')
+        
+        # Tenta carregar o JSON
+        try:
+            crops_data = json.loads(crops)
+        except json.JSONDecodeError:
+            # Se ainda falhar, pode ser que o JSON esteja envolto em aspas extras
+            crops_data = json.loads(json.loads(crops))
+            
+        # Garante que seja uma lista
         if isinstance(crops_data, str):
             crops_data = json.loads(crops_data)
         if isinstance(crops_data, dict):
             crops_data = [crops_data]
+        # -----------------------
 
         results = []
         for crop in crops_data:
